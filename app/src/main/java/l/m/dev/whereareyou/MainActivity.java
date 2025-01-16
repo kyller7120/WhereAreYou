@@ -3,7 +3,6 @@ package l.m.dev.whereareyou;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
-import android.Manifest;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.location.Location;
@@ -20,12 +19,12 @@ import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
-import android.hardware.Sensor;
 import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
-import android.widget.TextView;
 import com.google.android.material.textfield.TextInputEditText;
+import android.widget.ImageView;
+import android.widget.TextView;
+
+
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
     private SensorManager sensorManager;
@@ -33,10 +32,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private Sensor magnetometer;
     private float[] gravity;
     private float[] geomagnetic;
+    private ImageView compassArrow;
+    private TextView debugText;
     private DatabaseReference database;
 
-    private TextInputEditText latitudeEditText;
-    private TextInputEditText longitudeEditText;
+    private double targetLatitude = 19.4326; // Latitud fija (CDMX)
+    private double targetLongitude = -99.1332; // Longitud fija (CDMX)
 
     private FusedLocationProviderClient fusedLocationClient;
 
@@ -45,8 +46,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        latitudeEditText = findViewById(R.id.latitude_value);
-        longitudeEditText = findViewById(R.id.longitude_value);
 
         //Iniciando objetos para firebase y localizacion
         database = FirebaseDatabase.getInstance().getReference();
@@ -58,6 +57,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI);
         sensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_UI);
+
+        // Referencias a la interfaz
+        compassArrow = findViewById(R.id.compass_arrow);
+
 
         //Solicitar permisos al usuario
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -87,8 +90,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                             double longitude = location.getLongitude();
                             // Aquí puedes enviar la ubicación a la base de datos o usarla directamente.
                             updateLocationInDatabase("user1", latitude, longitude);
-                            latitudeEditText.setText(String.valueOf(latitude));
-                            longitudeEditText.setText(String.valueOf(longitude));
 
                         }
                     }
@@ -101,6 +102,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         double x = Math.cos(Math.toRadians(lat1)) * Math.sin(Math.toRadians(lat2)) -
                 Math.sin(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.cos(deltaLon);
         return (float) (Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
+    }
+
+    // Cálculo del ángulo hacia la ubicación objetivo
+    private float calculateBearingToTarget(double lat2, double lon2) {
+        double lat1 = 19.4326; // Latitud fija del usuario
+        double lon1 = -99.1332; // Longitud fija del usuario
+
+        double deltaLon = Math.toRadians(lon2 - lon1);
+        double y = Math.sin(deltaLon) * Math.cos(Math.toRadians(lat2));
+        double x = Math.cos(Math.toRadians(lat1)) * Math.sin(Math.toRadians(lat2)) -
+                Math.sin(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.cos(deltaLon);
+        return (float) ((Math.toDegrees(Math.atan2(y, x)) + 360) % 360);
     }
 
     @Override
@@ -119,6 +132,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 SensorManager.getOrientation(R, orientation);
                 float azimut = (float) Math.toDegrees(orientation[0]);
                 // Usa azimut con la dirección calculada para rotar la aguja
+                azimut = (azimut + 360) % 360;
+
+                // Calcular el ángulo hacia la ubicación objetivo
+                float bearingToTarget = calculateBearingToTarget(19.4326, -99.1332); // Lat/Lon fijas
+                float rotation = (bearingToTarget - azimut + 360) % 360;
+
+                // Rotar la flecha de la brújula
+                compassArrow.setRotation(rotation);
             }
         }
     }
@@ -150,7 +171,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         });
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI);
+        sensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_UI);
+    }
 
-    private class TextView {
+    @Override
+    protected void onPause() {
+        super.onPause();
+        sensorManager.unregisterListener(this);
     }
 }
