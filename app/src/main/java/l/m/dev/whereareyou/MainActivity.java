@@ -2,185 +2,231 @@ package l.m.dev.whereareyou;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.hardware.GeomagneticField;
 import android.hardware.Sensor;
+import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.animation.Animation;
+import android.view.animation.RotateAnimation;
+import android.widget.ImageView;
+import android.widget.TextView;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.tasks.OnSuccessListener;
 
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
-import android.hardware.SensorEvent;
-import com.google.android.material.textfield.TextInputEditText;
-import android.widget.ImageView;
-import android.widget.TextView;
-
-
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
-    private SensorManager sensorManager;
-    private Sensor accelerometer;
-    private Sensor magnetometer;
-    private float[] gravity;
-    private float[] geomagnetic;
-    private ImageView compassArrow;
-    private TextView debugText;
-    private DatabaseReference database;
+    private ImageView image, arrow;
+    private TextView tvHeading, tvUserLocation;
+    private float currentDegree = 0f;
+    private float currentDegreeNeedle = 0f;
 
-    private double targetLatitude = 19.4326; // Latitud fija (CDMX)
-    private double targetLongitude = -99.1332; // Longitud fija (CDMX)
+    private SensorManager mSensorManager;
+    private Location userLoc = new Location("service Provider");
 
-    private FusedLocationProviderClient fusedLocationClient;
+    private LocationManager locationManager;
+
+    // Coordenadas del destino
+    private final double DEST_LAT = 13.722141127699249; // Latitud destino
+    private final double DEST_LON = -88.93846870277245; // Longitud destino
+
+    private final LocationListener locationListener = new LocationListener() {
+        @Override
+        public void onLocationChanged(Location location) {
+            // Actualizar ubicación del usuario
+            userLoc.setLongitude(location.getLongitude());
+            userLoc.setLatitude(location.getLatitude());
+            userLoc.setAltitude(location.getAltitude());
+
+            // Mostrar las coordenadas del usuario en pantalla
+            String userCoordinates = "Lat: " + location.getLatitude() +
+                    "\nLon: " + location.getLongitude();
+            tvUserLocation.setText(userCoordinates);
+
+            // Sincronizar con Firebase (opcional)
+            saveToFirebase(location.getLatitude(), location.getLongitude());
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+            // No se requiere acción
+        }
+
+        @Override
+        public void onProviderEnabled(String provider) {
+            // No se requiere acción
+        }
+
+        @Override
+        public void onProviderDisabled(String provider) {
+            // No se requiere acción
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Inicializar vistas
+        image = findViewById(R.id.imageCompass);
+        arrow = findViewById(R.id.needle);
+        tvHeading = findViewById(R.id.heading);
+        tvUserLocation = findViewById(R.id.tvUserLocation); // Mostrar ubicación
 
-        //Iniciando objetos para firebase y localizacion
-        database = FirebaseDatabase.getInstance().getReference();
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        // Inicializar sensor manager
+        mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
 
-        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        magnetometer = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        // Inicializar LocationManager
+        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
 
-        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI);
-        sensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_UI);
-
-        // Referencias a la interfaz
-        compassArrow = findViewById(R.id.compass_arrow);
-
-
-        //Solicitar permisos al usuario
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+        // Verificar permisos de ubicación
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 101);
         } else {
-            getCurrentLocation();
-        }
-
-    }
-
-    private void updateLocationInDatabase(String userId, double latitude, double longitude) {
-        // Crea un objeto UserLocation y lo guarda en la base de datos
-        UserLocation userLocation = new UserLocation(latitude, longitude);
-        database.child("users").child(userId).setValue(userLocation);
-    }
-
-    private void getCurrentLocation() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            return;
-        }
-        fusedLocationClient.getLastLocation()
-                .addOnSuccessListener(this, new OnSuccessListener<Location>() {
-                    @Override
-                    public void onSuccess(Location location) {
-                        if (location != null) {
-                            double latitude = location.getLatitude();
-                            double longitude = location.getLongitude();
-                            // Aquí puedes enviar la ubicación a la base de datos o usarla directamente.
-                            updateLocationInDatabase("user1", latitude, longitude);
-
-                        }
-                    }
-                });
-    }
-
-    private float calculateBearing(double lat1, double lon1, double lat2, double lon2) {
-        double deltaLon = Math.toRadians(lon2 - lon1);
-        double y = Math.sin(deltaLon) * Math.cos(Math.toRadians(lat2));
-        double x = Math.cos(Math.toRadians(lat1)) * Math.sin(Math.toRadians(lat2)) -
-                Math.sin(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.cos(deltaLon);
-        return (float) (Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
-    }
-
-    // Cálculo del ángulo hacia la ubicación objetivo
-    private float calculateBearingToTarget(double lat2, double lon2) {
-        double lat1 = 19.4326; // Latitud fija del usuario
-        double lon1 = -99.1332; // Longitud fija del usuario
-
-        double deltaLon = Math.toRadians(lon2 - lon1);
-        double y = Math.sin(deltaLon) * Math.cos(Math.toRadians(lat2));
-        double x = Math.cos(Math.toRadians(lat1)) * Math.sin(Math.toRadians(lat2)) -
-                Math.sin(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.cos(deltaLon);
-        return (float) ((Math.toDegrees(Math.atan2(y, x)) + 360) % 360);
-    }
-
-    @Override
-    public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-            gravity = event.values;
-        } else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
-            geomagnetic = event.values;
-        }
-
-        if (gravity != null && geomagnetic != null) {
-            float[] R = new float[9];
-            float[] I = new float[9];
-            if (SensorManager.getRotationMatrix(R, I, gravity, geomagnetic)) {
-                float[] orientation = new float[3];
-                SensorManager.getOrientation(R, orientation);
-                float azimut = (float) Math.toDegrees(orientation[0]);
-                // Usa azimut con la dirección calculada para rotar la aguja
-                azimut = (azimut + 360) % 360;
-
-                // Calcular el ángulo hacia la ubicación objetivo
-                float bearingToTarget = calculateBearingToTarget(19.4326, -99.1332); // Lat/Lon fijas
-                float rotation = (bearingToTarget - azimut + 360) % 360;
-
-                // Rotar la flecha de la brújula
-                compassArrow.setRotation(rotation);
-            }
-        }
-    }
-    @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {}
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 1 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            getCurrentLocation();
+            obtenerUbicacionUsuario();
         }
     }
 
-    //funcionalidad para recibir la ubicación del otro usuario
-    private void fetchOtherUserLocation(String userId) {
-        database.child("users").child(userId).get().addOnSuccessListener(dataSnapshot -> {
-            if (dataSnapshot.exists()) {
-                UserLocation userLocation = dataSnapshot.getValue(UserLocation.class);
-                if (userLocation != null) {
-                    double latitude = userLocation.latitude;
-                    double longitude = userLocation.longitude;
+    // Método para obtener la ubicación del usuario
+    private void obtenerUbicacionUsuario() {
+        try {
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                        LocationManager.GPS_PROVIDER, 1000, 1, locationListener);
 
-                    // Aquí puedes usar la ubicación obtenida (por ejemplo, mostrarla en un TextView)
-                    // Ejemplo: Actualizar un TextView
-                    System.out.println("Ubicación del usuario: Latitud=" + latitude + ", Longitud=" + longitude);
+                // Obtener última ubicación conocida
+                Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                if (lastKnownLocation != null) {
+                    userLoc.setLongitude(lastKnownLocation.getLongitude());
+                    userLoc.setLatitude(lastKnownLocation.getLatitude());
+                    userLoc.setAltitude(lastKnownLocation.getAltitude());
+
+                    String userCoordinates = "Lat: " + lastKnownLocation.getLatitude() +
+                            "\nLon: " + lastKnownLocation.getLongitude();
+                    tvUserLocation.setText(userCoordinates);
                 }
+            } else {
+                tvUserLocation.setText("GPS no está activado.");
             }
-        });
+        } catch (SecurityException e) {
+            e.printStackTrace();
+            tvUserLocation.setText("No se puede obtener la ubicación.");
+        }
+    }
+
+    // Manejo del resultado de permisos
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 101) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                obtenerUbicacionUsuario();
+            } else {
+                tvUserLocation.setText("Permiso de ubicación denegado.");
+            }
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI);
-        sensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_UI);
+        Sensor sensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
+        if (sensor != null) {
+            mSensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME);
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        sensorManager.unregisterListener(this);
+        mSensorManager.unregisterListener(this);
+        locationManager.removeUpdates(locationListener);
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        // Obtener el valor de la brújula
+        float degree = event.values[0];
+
+        // Definir ubicación del destino
+        Location destinationLoc = new Location("service Provider");
+        destinationLoc.setLatitude(DEST_LAT);
+        destinationLoc.setLongitude(DEST_LON);
+
+        // Obtener la dirección hacia el destino
+        float bearTo = userLoc.bearingTo(destinationLoc);
+        if (bearTo < 0) {
+            bearTo += 360;
+        }
+
+        // Calcular la dirección final
+        float direction = bearTo - degree;
+        if (direction < 0) {
+            direction += 360;
+        }
+
+        // Mostrar el ángulo de la brújula
+        tvHeading.setText("Heading: " + degree + "°");
+
+        // Animación de la aguja de la brújula
+        RotateAnimation raQibla = new RotateAnimation(
+                currentDegreeNeedle, direction,
+                Animation.RELATIVE_TO_SELF, 0.5f,
+                Animation.RELATIVE_TO_SELF, 0.5f
+        );
+        raQibla.setDuration(210);
+        raQibla.setFillAfter(true);
+        arrow.startAnimation(raQibla);
+        currentDegreeNeedle = direction;
+
+        // Animación del fondo de la brújula
+        RotateAnimation ra = new RotateAnimation(
+                currentDegree, -degree,
+                Animation.RELATIVE_TO_SELF, 0.5f,
+                Animation.RELATIVE_TO_SELF, 0.5f
+        );
+        ra.setDuration(210);
+        ra.setFillAfter(true);
+        image.startAnimation(ra);
+        currentDegree = -degree;
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // No se requiere acción
+    }
+
+    // Método para guardar la ubicación en Firebase
+    private void saveToFirebase(double latitude, double longitude) {
+        FirebaseDatabase database = FirebaseDatabase.getInstance();
+        DatabaseReference ref = database.getReference("UserLocation");
+
+        // Guardar coordenadas
+        ref.setValue(new UserLocation(latitude, longitude));
+    }
+
+    // Clase para modelar la ubicación del usuario
+    public static class UserLocation {
+        public double latitude;
+        public double longitude;
+
+        public UserLocation() {
+        }
+
+        public UserLocation(double latitude, double longitude) {
+            this.latitude = latitude;
+            this.longitude = longitude;
+        }
     }
 }

@@ -2,17 +2,51 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#f0f0f0">
+    android:background="@color/white">
 
-    <!-- Imagen de la brújula -->
-    <ImageView
-        android:id="@+id/compass_arrow"
+    <TextView
+        android:id="@+id/heading"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_centerInParent="true"
-        android:src="@drawable/arrow" />
+        android:textColor="@color/black"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="20dp"
+        android:text="Heading: 0.0" />
 
-    <!-- Texto para mostrar información de depuración -->
-    
+    <RelativeLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/heading"
+        android:layout_centerHorizontal="true">
+
+        <ImageView
+            android:id="@+id/imageCompass"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/compass" />
+
+        <ImageView
+            android:id="@+id/needle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/arrow" />
+
+        <TextView
+            android:id="@+id/tvGeomagneticField"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Geomagnetic Field"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/tvUserLocation"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Ubicación del Usuario: "
+            android:textSize="18sp"
+            android:layout_marginTop="20dp"
+            android:layout_below="@id/tvGeomagneticField"
+            android:layout_marginLeft="16dp"
+            />
+    </RelativeLayout>
 </RelativeLayout>
-
