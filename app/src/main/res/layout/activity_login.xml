@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="32dp"
+    android:gravity="center">
+
+    <!-- Título de la aplicación -->
+    <TextView
+        android:id="@+id/welcome_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="¡Bienvenido a WhereAreYou!"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="20dp" />
+
+    <!-- Botón de inicio de sesión con Google -->
+    <com.google.android.gms.common.SignInButton
+        android:id="@+id/sign_in_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="30dp" />
+
+    <!-- Otras vistas que puedas necesitar -->
+    <TextView
+        android:id="@+id/terms_of_service"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Al iniciar sesión, aceptas los catachotérminos."
+        android:textSize="20sp"
+        android:layout_marginTop="20dp"
+        android:gravity="center" />
+
+</LinearLayout>
